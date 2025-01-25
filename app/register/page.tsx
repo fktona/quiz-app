@@ -26,7 +26,7 @@ export default function Register() {
       }
       if (result && result.success) {
         toast.success("Account created successfully!");
-        navigate.push("/dashboard");
+        navigate.push("/");
       }
       // If successful, the action will redirect
     } catch (error) {

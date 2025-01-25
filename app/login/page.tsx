@@ -23,7 +23,7 @@ export default function Login() {
       const result = await loginAction(formData);
       if (result.success) {
         toast.success("Welcome back!");
-        navigate.push("/dashboard");
+        navigate.push("/");
       }
       if (result.success === false) {
         toast.error(result.error);

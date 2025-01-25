@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { LayoutGrid, History, Trophy, LogOut, Menu } from "lucide-react";
+import { User, History, Trophy, LogOut, Menu } from "lucide-react";
 import { logoutAction } from "@/app/actions";
 import { toast } from "sonner";
 import {
@@ -23,7 +23,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { href: "/dashboard", icon: LayoutGrid, label: "Dashboard" },
+    { href: "/profile", icon: User, label: "Profile" },
     { href: "/history", icon: History, label: "Performance History" },
     { href: "/leaderboard", icon: Trophy, label: "Leaderboard" },
   ];

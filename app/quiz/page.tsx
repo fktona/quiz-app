@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Timer } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Layout from "@/components/layout";
 import { ScoreModal } from "@/components/score-modal";
 import { startQuizAction, submitQuizAction } from "../actions";
@@ -25,16 +24,28 @@ interface Answer {
   answer: string;
 }
 
+interface QuizResults {
+  score: number;
+  correctAnswers: number;
+  incorrectAnswers: number;
+  totalQuestions: number;
+  results: {
+    question: string;
+    correct: boolean;
+    answer: string;
+    correctAnswer: string;
+  }[];
+}
+
 export default function Quiz() {
-  const router = useRouter();
-  const [quizId, setQuizId] = useState<string>("");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(600);
   const [showScoreModal, setShowScoreModal] = useState(false);
-  const [quizResults, setQuizResults] = useState<any>(null);
+  const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
   const [category, setCategory] = useState<string>("");
+
   const questionsPerPage = 5;
 
   useEffect(() => {
@@ -42,22 +53,87 @@ export default function Quiz() {
     const randomCategory =
       categories[Math.floor(Math.random() * categories.length)];
     setCategory(randomCategory);
+
     async function initQuiz() {
       try {
         const result = await startQuizAction(randomCategory);
         if (result.success) {
-          setQuizId(result.data.quiz_id);
           setQuestions(result.data.questions);
         } else {
           toast.error(result.error);
         }
       } catch (error) {
         toast.error("Failed to start quiz");
+        console.error(error);
       }
     }
 
     initQuiz();
   }, []);
+
+  const handleSubmit = useCallback(async () => {
+    const currentQuestions = getCurrentQuestions();
+    const allAnswered = currentQuestions.every((_, index) =>
+      answers.find(
+        (a) => a.questionIndex === currentPage * questionsPerPage + index
+      )
+    );
+
+    if (!allAnswered) {
+      toast.error("Please answer all questions before proceeding.");
+      return;
+    }
+
+    if (currentPage < Math.ceil(questions.length / questionsPerPage) - 1) {
+      setCurrentPage((prev) => prev + 1);
+    } else {
+      let score = 0;
+      const results = questions.map((question, index) => {
+        const userAnswer =
+          answers.find((a) => a.questionIndex === index)?.answer || "No Answer";
+        const correct = question.answer === userAnswer;
+        if (correct) score += 1;
+
+        return {
+          question: question.question,
+          correct,
+          answer: userAnswer,
+          correctAnswer: question.answer,
+        };
+      });
+
+      setQuizResults({
+        score,
+        correctAnswers: score,
+        incorrectAnswers: questions.length - score,
+        totalQuestions: questions.length,
+        results,
+      });
+
+      setShowScoreModal(true);
+
+      try {
+        const result = await submitQuizAction({
+          category: category,
+          difficulty: "easy",
+          answers: answers.map((a) => ({
+            question_index: a.questionIndex,
+            answer: a.answer,
+          })),
+          score,
+        });
+
+        if (result.success) {
+          toast.success("Quiz submitted successfully!");
+        } else {
+          toast.error(result.error);
+        }
+      } catch (error) {
+        toast.error("Failed to submit quiz");
+        console.error(error);
+      }
+    }
+  }, [answers, category, currentPage, questions]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -72,7 +148,7 @@ export default function Quiz() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [handleSubmit]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -95,44 +171,6 @@ export default function Quiz() {
       }
       return [...prev, { questionIndex, answer }];
     });
-  };
-
-  const handleSubmit = async () => {
-    const currentQuestions = getCurrentQuestions();
-    const allAnswered = currentQuestions.every((_, index) =>
-      answers.find(
-        (a) => a.questionIndex === currentPage * questionsPerPage + index
-      )
-    );
-
-    if (!allAnswered) {
-      toast.error("Please answer all questions before proceeding.");
-      return;
-    }
-
-    if (currentPage < Math.ceil(questions.length / questionsPerPage) - 1) {
-      setCurrentPage((prev) => prev + 1);
-    } else {
-      try {
-        const result = await submitQuizAction({
-          category: category,
-          difficulty: "easy",
-          answers: answers.map((a) => ({
-            question_index: a.questionIndex,
-            answer: a.answer,
-          })),
-        });
-
-        if (result.success) {
-          setQuizResults(result.data);
-          setShowScoreModal(true);
-        } else {
-          toast.error(result.error);
-        }
-      } catch (error) {
-        toast.error("Failed to submit quiz");
-      }
-    }
   };
 
   if (questions.length === 0) {
@@ -164,8 +202,8 @@ export default function Quiz() {
                 Math.min(
                   questionsPerPage,
                   questions.length - currentPage * questionsPerPage
-                )}
-              /{questions.length}
+                )}{" "}
+              / {questions.length}
             </div>
           </div>
           <Progress
@@ -258,9 +296,10 @@ export default function Quiz() {
             isOpen={showScoreModal}
             onOpenChange={setShowScoreModal}
             score={quizResults.score}
-            totalQuestions={questions.length}
-            correctAnswers={quizResults.score}
-            incorrectAnswers={questions.length - quizResults.score}
+            totalQuestions={quizResults.totalQuestions}
+            correctAnswers={quizResults.correctAnswers}
+            incorrectAnswers={quizResults.incorrectAnswers}
+            results={quizResults.results}
           />
         )}
       </div>
